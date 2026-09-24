@@ -5,6 +5,41 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 60_000;
+const requestLog = new Map<string, number[]>();
+
+function getClientKey(request: Request) {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "anonymous"
+  );
+}
+
+function checkRateLimit(key: string) {
+  const now = Date.now();
+  const recentRequests = (requestLog.get(key) || []).filter(
+    (timestamp) => now - timestamp < RATE_WINDOW_MS
+  );
+
+  if (recentRequests.length >= RATE_LIMIT) {
+    const retryAfter = Math.ceil(
+      (RATE_WINDOW_MS - (now - recentRequests[0])) / 1000
+    );
+    requestLog.set(key, recentRequests);
+    return { allowed: false, remaining: 0, retryAfter };
+  }
+
+  recentRequests.push(now);
+  requestLog.set(key, recentRequests);
+  return {
+    allowed: true,
+    remaining: RATE_LIMIT - recentRequests.length,
+    retryAfter: 0,
+  };
+}
+
 const SYSTEM_PROMPT = `
 You are Corporate Translator, a humorous AI that transforms ordinary
 workplace accomplishments into exaggerated, polished LinkedIn-style posts.
@@ -24,7 +59,7 @@ Style:
 - Occasionally ridiculous
 - Use emojis naturally
 - Use short paragraphs
-- Include a "key takeaway" when appropriate
+- Never include a section or line labeled "Takeaway" or "Key takeaway"
 - End with relevant hashtags
 - Make the result genuinely entertaining
 
@@ -51,15 +86,35 @@ While correcting a simple documentation issue may seem minor, it reminded
 me that impactful progress often comes from a continuous commitment to
 improvement.
 
-💡 Key takeaway: Great products aren't built through massive changes alone.
-They're built one detail at a time.
-
 Grateful for the opportunity to learn, improve, and contribute.
 
 #ContinuousImprovement #Learning #GrowthMindset #Engineering"
 `;
 
+function removeTakeaway(result: string) {
+  return result
+    .replace(/(?:^|\n)\s*(?:💡\s*)?(?:\*\*)?(?:Key\s+)?Takeaway(?:\*\*)?\s*:\s*[\s\S]*?(?=\n\s*\n|\n\s*#|$)/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export async function POST(request: Request) {
+  const rateLimit = checkRateLimit(getClientKey(request));
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many translations. Please try again in a moment." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(rateLimit.retryAfter),
+          "X-RateLimit-Limit": String(RATE_LIMIT),
+          "X-RateLimit-Remaining": "0",
+        },
+      }
+    );
+  }
+
   try {
     const body = await request.json();
 
@@ -127,7 +182,15 @@ ${input}
       );
     }
 
-    return NextResponse.json({ result });
+    return NextResponse.json(
+      { result: removeTakeaway(result) },
+      {
+        headers: {
+          "X-RateLimit-Limit": String(RATE_LIMIT),
+          "X-RateLimit-Remaining": String(rateLimit.remaining),
+        },
+      }
+    );
   } catch (error) {
     console.error("Translation error:", error);
 
