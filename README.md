@@ -15,7 +15,7 @@ post URLs, theme persistence, and basic abuse protection.
 - Explicit light/dark mode with a persisted browser preference.
 - Generated favicon, Open Graph image, Twitter metadata, and descriptive page
   metadata.
-- Privacy policy at [`/privacy`](http://localhost:3000/privacy).
+- Privacy policy at [corporate-translator-amber.vercel.app/privacy](https://corporate-translator-amber.vercel.app/privacy).
 - Per-client rate limiting and request validation on the translation endpoint.
 - Security response headers configured for deployment.
 
@@ -136,9 +136,8 @@ limiting provider.
    translation route.
 5. For production traffic, move rate-limit state to a shared store.
 
-The app uses `metadataBase` in `src/app/layout.tsx` for social metadata. Update
-that URL to the real production domain before launch if it differs from the
-configured default.
+The app uses `metadataBase` in `src/app/layout.tsx` for social metadata and is
+configured for `https://corporate-translator-amber.vercel.app`.
 
 ## Responsible use
 

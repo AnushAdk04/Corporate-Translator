@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://corporate-translator.vercel.app"),
+  metadataBase: new URL("https://corporate-translator-amber.vercel.app"),
   title: {
     default: "Corporate Translator",
     template: "%s | Corporate Translator",
@@ -46,7 +46,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(() => { try { const saved = localStorage.getItem("corporate-translator-theme"); const dark = saved === "dark" || (!saved && window.matchMedia("(prefers-color-scheme: dark)").matches); if (dark) document.documentElement.classList.add("dark"); } catch {} })();`,
+        }}
+      />
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
