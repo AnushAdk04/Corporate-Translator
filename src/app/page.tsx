@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   ArrowRight,
   BriefcaseBusiness,
@@ -523,6 +524,13 @@ export default function Home() {
             <span className="font-semibold text-zinc-500">Groq</span>
             <span>⚡</span>
           </div>
+
+          <Link
+            href="/privacy"
+            className="mt-2 font-medium text-zinc-500 underline-offset-4 transition hover:text-blue-600 hover:underline dark:text-zinc-300"
+          >
+            Privacy policy
+          </Link>
         </footer>
       </div>
     </main>

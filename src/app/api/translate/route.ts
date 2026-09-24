@@ -7,12 +7,14 @@ const groq = new Groq({
 
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 60_000;
+const MAX_TRACKED_CLIENTS = 10_000;
 const requestLog = new Map<string, number[]>();
 
 function getClientKey(request: Request) {
   return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-vercel-forwarded-for")?.trim() ||
     request.headers.get("x-real-ip") ||
+    request.headers.get("x-forwarded-for")?.split(",").pop()?.trim() ||
     "anonymous"
   );
 }
@@ -32,6 +34,10 @@ function checkRateLimit(key: string) {
   }
 
   recentRequests.push(now);
+  if (requestLog.size >= MAX_TRACKED_CLIENTS && !requestLog.has(key)) {
+    const oldestKey = requestLog.keys().next().value;
+    if (oldestKey) requestLog.delete(oldestKey);
+  }
   requestLog.set(key, recentRequests);
   return {
     allowed: true,
@@ -99,6 +105,14 @@ function removeTakeaway(result: string) {
 }
 
 export async function POST(request: Request) {
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin) {
+    return NextResponse.json(
+      { error: "Cross-origin requests are not allowed." },
+      { status: 403, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
   const rateLimit = checkRateLimit(getClientKey(request));
 
   if (!rateLimit.allowed) {
@@ -110,12 +124,21 @@ export async function POST(request: Request) {
           "Retry-After": String(rateLimit.retryAfter),
           "X-RateLimit-Limit": String(RATE_LIMIT),
           "X-RateLimit-Remaining": "0",
+          "Cache-Control": "no-store",
         },
       }
     );
   }
 
   try {
+    const contentLength = Number(request.headers.get("content-length") || 0);
+    if (contentLength > 12_000) {
+      return NextResponse.json(
+        { error: "Request payload is too large." },
+        { status: 413, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
     const body = await request.json();
 
     const input = body.input;
@@ -128,10 +151,17 @@ export async function POST(request: Request) {
       );
     }
 
-    if (input.length > 2000) {
+    if (input.length === 0 || input.length > 2000) {
       return NextResponse.json(
         { error: "Keep your input under 2,000 characters." },
-        { status: 400 }
+        { status: 400, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
+    if (typeof intensity !== "string") {
+      return NextResponse.json(
+        { error: "Please choose a valid intensity." },
+        { status: 400, headers: { "Cache-Control": "no-store" } }
       );
     }
 
@@ -188,6 +218,7 @@ ${input}
         headers: {
           "X-RateLimit-Limit": String(RATE_LIMIT),
           "X-RateLimit-Remaining": String(rateLimit.remaining),
+          "Cache-Control": "no-store",
         },
       }
     );
@@ -196,7 +227,7 @@ ${input}
 
     return NextResponse.json(
       { error: "Something went wrong. Please try again." },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

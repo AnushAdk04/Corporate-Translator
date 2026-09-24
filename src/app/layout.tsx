@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     "Turn everyday tasks into inspirational LinkedIn posts with questionable amounts of corporate enthusiasm.",
   applicationName: "Corporate Translator",
   icons: {
-    icon: "/favicon.svg",
+    icon: "/icon.svg",
   },
   openGraph: {
     title: "Corporate Translator",
